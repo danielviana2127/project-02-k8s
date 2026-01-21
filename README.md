@@ -1,160 +1,175 @@
-# 🚀 Projeto 02 — Aplicação Java com Kubernetes
+# Projeto 02 – Docker + Kubernetes na Prática
 
-Este projeto tem como objetivo demonstrar a execução de uma aplicação Java containerizada rodando em Kubernetes, aplicando boas práticas de configuração, escalabilidade e separação de responsabilidades.
+## 🎯 Objetivo
 
-O foco está em simular um ambiente próximo ao real, utilizando recursos fundamentais do Kubernetes como Deployments, Services, ConfigMaps, Secrets e Ingress.
+Executar a aplicação do **Projeto 01** em um cluster Kubernetes local, utilizando **Deployment, Service, ConfigMap, Secret e Ingress**, seguindo boas práticas de separação de responsabilidades, segurança e observabilidade básica.
+
+O foco deste projeto é demonstrar **entendimento real do funcionamento do Kubernetes**, indo além de apenas "fazer rodar".
 
 ---
 
-## 🧱 Arquitetura do Projeto
+## 🧱 Stack utilizada
 
-* Aplicação Java simples (endpoint HTTP)
-* Container Docker
 * Kubernetes (Minikube)
-* Deployment para gerenciamento de Pods
-* Service para exposição interna
-* ConfigMap para configurações não sensíveis
-* Secret para dados sensíveis
-* Ingress para acesso HTTP externo
+* kubectl
+* Docker Hub
+* NGINX Ingress Controller
 
 ---
 
-## 📂 Estrutura de Diretórios
+## 📁 Estrutura do projeto
 
-```text
+```
 project-02-k8s/
-├── app/
-│   └── (código da aplicação Java)
-├── k8s/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   ├── configmap.yaml
-│   ├── secret.yaml
-│   └── ingress.yaml
-└── README.md
+├── README.md
+└── k8s/
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── configmap.yaml
+    ├── secret.yaml
+    └── ingress.yaml
 ```
 
 ---
 
-## ⚙️ Configurações com ConfigMap
+## 🔄 Fluxo do request
 
-As configurações da aplicação (como mensagens e parâmetros não sensíveis) são gerenciadas via **ConfigMap**, permitindo alterar o comportamento da aplicação **sem necessidade de rebuild da imagem Docker**.
+1. O cliente acessa a aplicação (via Service ou Ingress)
+2. O **Service (ClusterIP)** recebe a requisição
+3. O Service encaminha para um dos **Pods** do Deployment
+4. O container expõe a aplicação na porta **8080**
+5. A resposta retorna ao cliente
 
-Exemplos de uso:
-
-* Mensagens exibidas pela API
-* Variáveis de ambiente não sensíveis
-
----
-
-## 🔐 Gerenciamento de Segredos com Secret
-
-Dados sensíveis, como tokens e credenciais, são armazenados em **Secrets**, evitando exposição direta no código ou nos manifests Kubernetes.
-
-Esses valores são injetados na aplicação via variáveis de ambiente.
+```
+Cliente → Service → Pod → Aplicação Java
+```
 
 ---
 
-## 📦 Deployment e Escalabilidade
+## 📦 Recursos Kubernetes e decisões técnicas
 
-A aplicação é gerenciada por um **Deployment**, garantindo:
+### 🔹 Deployment
 
-* Alta disponibilidade
-* Recriação automática de Pods em caso de falha
-* Facilidade para escalar horizontalmente
+Responsável por:
 
-Exemplo de escala manual:
+* Criar e gerenciar os Pods
+* Garantir alta disponibilidade
+* Permitir escalabilidade horizontal
+
+A imagem da aplicação é obtida diretamente do **Docker Hub**, simulando um ambiente real de produção.
+
+---
+
+### 🔹 Service
+
+O Service do tipo **ClusterIP** é utilizado para:
+
+* Expor os Pods internamente no cluster
+* Permitir comunicação estável entre recursos
+* Viabilizar testes via `kubectl port-forward`
+
+Sem o Service, não é possível acessar a aplicação nem via port-forward nem via Ingress.
+
+---
+
+### 🔹 ConfigMap
+
+Utilizado para armazenar configurações **não sensíveis**, como:
+
+* Porta da aplicação
+* Variáveis de ambiente gerais
+
+🔁 Permite alterar configurações **sem rebuild da imagem Docker**.
+
+---
+
+### 🔹 Secret
+
+Utilizado para armazenar **dados sensíveis**, como tokens e credenciais.
+
+* Nenhuma variável sensível está hardcoded no código
+* Secrets são injetados como variáveis de ambiente no container
+
+---
+
+### 🔹 Ingress
+
+O Ingress foi configurado para simular acesso externo à aplicação, utilizando o **NGINX Ingress Controller**.
+
+Mesmo com o teste principal sendo feito via Service, o Ingress demonstra entendimento do fluxo de entrada em ambientes Kubernetes.
+
+---
+
+## 📈 Escalabilidade
+
+Para escalar a aplicação horizontalmente:
 
 ```bash
-kubectl scale deployment app-deployment --replicas=2
+kubectl scale deployment app-deployment --replicas=3
 ```
 
----
-
-## 🔗 Service
-
-O **Service** abstrai os Pods e fornece um ponto único de acesso interno à aplicação, garantindo comunicação estável mesmo com múltiplas réplicas.
+O Service distribui automaticamente as requisições entre os Pods disponíveis.
 
 ---
 
-## 🌐 Ingress
+## 🔧 Alterar configuração sem rebuild
 
-O **Ingress** é utilizado para simular um cenário mais próximo de produção, centralizando o acesso HTTP à aplicação e permitindo roteamento por domínio.
+Para alterar uma configuração:
 
----
-
-## 🌐 Como acessar a aplicação
-
-### 🔹 Via Service (debug local)
+1. Edite o arquivo `configmap.yaml`
+2. Aplique novamente:
 
 ```bash
-kubectl port-forward svc/app-service 8080:80
+kubectl apply -f k8s/configmap.yaml
 ```
 
-Acesse:
+3. Reinicie o Deployment:
 
 ```bash
-curl http://localhost:8080
+kubectl rollout restart deployment app-deployment
 ```
 
-Ou pelo navegador:
-
-```
-http://localhost:8080
-```
+Nenhuma nova imagem Docker é necessária.
 
 ---
 
-### 🔹 Via Ingress
+## 📜 Logs da aplicação
 
-1. Obter o IP do Minikube:
-
-```bash
-minikube ip
-```
-
-2. Adicionar no arquivo `/etc/hosts`:
-
-```text
-<IP_DO_MINIKUBE> app.local
-```
-
-3. Acessar no navegador:
-
-```text
-http://app.local
-```
-
----
-
-## 📊 Logs da Aplicação
-
-Os logs podem ser consultados diretamente via Kubernetes:
+Os logs podem ser acessados diretamente via Kubernetes:
 
 ```bash
 kubectl logs -l app=java-app
 ```
 
-Os logs foram utilizados durante o projeto para **troubleshooting**, incluindo erros de configuração de image pull, secrets e service.
+Isso permite observar o comportamento da aplicação sem acessar diretamente os containers.
 
 ---
 
-## 🧪 Testes Manuais
+## 🧪 Testes realizados
 
-A aplicação foi validada utilizando:
+A aplicação foi validada utilizando **Service + port-forward**:
 
-* `curl`
-* Navegador web
-* Port-forward
-* Ingress
+```bash
+kubectl port-forward svc/app-service 8080:80
+curl http://localhost:8080
+```
 
-Todos os testes confirmaram que a aplicação responde corretamente às requisições HTTP.
+Resposta esperada:
+
+```
+🚀 API Java rodando com CI/CD completo!
+```
 
 ---
 
-## 🎯 Objetivo do Projeto
+## ✅ Critérios atendidos
 
-Este projeto foi desenvolvido com foco em aprendizado prático e consolidação de conceitos essenciais de Kubernetes, simulando um ambiente real de deploy de aplicações containerizadas.
+* ✔ Aplicação rodando em Kubernetes
+* ✔ Uso correto de Deployment, Service, ConfigMap, Secret e Ingress
+* ✔ Variáveis sensíveis protegidas
+* ✔ Configuração desacoplada da imagem
+* ✔ Logs acessíveis via kubectl
+* ✔ README explicando decisões técnicas
 
 ---
 
